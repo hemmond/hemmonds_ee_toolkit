@@ -11,6 +11,9 @@ function table.remove_value(list, value)
     end
 end
 
+-- Runs function on every element of list
+-- @param list: List on which elements functions should be run. 
+-- @param fx: Function to be run on every element. This function must get exactly one argument - the element from the list.
 function foreach(list, fx)
     for i, object in ipairs(list) do
         fx(object)
