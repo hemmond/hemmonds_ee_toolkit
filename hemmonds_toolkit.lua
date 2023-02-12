@@ -1,7 +1,10 @@
 require("hemmonds_toolkit_luax.lua")
 require("hemmonds_toolkit_immovableObjects.lua")
 require("hemmonds_toolkit_tacShieldsControls.lua")
+require("hemmonds_toolkit_scheduler.lua")
 --TODO move GM buttons to separate file
+
+_hemmonds_toolkit_data = {SPAWN_MULTIPLE_ENEMIES=false}
 
 function reset_scenario_button(script_name)
     addGMFunction("RESET SCENARIO", function() setScenario(script_name, "None") end)
@@ -12,6 +15,7 @@ end
 function hemmonds_toolkit_update(delta)
     immovableObjects:update()
     tacShieldsControls:update(delta)
+    scheduler_update()
 end
 
 
@@ -61,9 +65,7 @@ function gm_refil_torpedoes_button()
         local arr = getGMSelection()
         local misTypes = {"Homing", "Nuke", "Mine", "EMP", "HVLI"}
         for i=1, #arr do
-            for j=1, #misTypes do
-                arr[i]:setWeaponStorage(misTypes[j], arr[i]:getWeaponStorageMax(misTypes[j]))
-            end
+            refil_torpedoes(arr[i])
         end
     end)
 end
@@ -72,35 +74,78 @@ function gm_refill_energy_button()
     addGMFunction("Refill energy", function()
         local arr = getGMSelection()
         for i=1, #arr do
-            arr[i]:setEnergy(arr[i]:getMaxEnergy())
+            refill_energy(arr[i])
         end
     end)
 end
 
+function gm_exec_on_gm_click_button(label, fx, multi_mode)
+    if multi_mode == nil then multi_mode=false end
+    addGMFunction(label, function()
+        onGMClick(function(x,y)
+            math.abs(0)
+            fx(x,y)
+            if multi_mode == false then
+                onGMClick(nil)
+            end
+        end)
+    end)
+end
+
+function addGMLabel(text)
+    if text == nil then text = "--------" end
+    addGMFunction(text, function() string.format("") end)
+end
+
+--- -----------------------------------
+--- Convenience functions (mostly triggered by GM)
+--- -----------------------------------
+
+function refil_torpedoes(ship)
+    local misTypes = {"Homing", "Nuke", "Mine", "EMP", "HVLI"}
+    for j=1, #misTypes do
+        ship:setWeaponStorage(misTypes[j], ship:getWeaponStorageMax(misTypes[j]))
+    end
+end
+
+function refill_energy(ship)
+    ship:setEnergy(ship:getMaxEnergy())
+end
 
 --- -----------------------------------
 --- ENEMY SPAWNING
---- -----------------------------------
+--- ----------------------------------- 
 
-function gm_spawn_enemy_button(previous_menu)
-    addGMFunction("Spawn enemy", function() math.abs(0) gm_spawn_enemy_menu(previous_menu) end)
+function gm_spawn_enemy_button(previous_menu, faction)
+    addGMFunction("Spawn enemy", function() math.abs(0) gm_spawn_enemy_menu(previous_menu, faction) end)
 end
 
-function gm_spawn_enemy_menu(previous_menu)
+function gm_spawn_enemy_menu(previous_menu, faction)
+    if faction == nil then faction="Kraylor" end
+    
     clearGMFunctions()
     if previous_menu ~= nil then
         addGMFunction("-From Spawn enemy", function() math.abs(0) clearGMFunctions() previous_menu() end)
     end
-
-    addGMFunction(" Spawn MT52 Hornet",function() _spawn_enemy("MT52 Hornet") end)
-    addGMFunction(" Spawn MU52 hornet",function() _spawn_enemy("MU52 Hornet") end)
-    addGMFunction(" Spawn Adder MK5",function() _spawn_enemy("Adder MK5") end)
-
-    addGMFunction(" Spawn Stalker Q7",function() _spawn_enemy("Stalker Q7") end)
-    addGMFunction(" Spawn Phobos T3",function() _spawn_enemy("Phobos T3") end)
+    
+    if _hemmonds_toolkit_data.SPAWN_MULTIPLE_ENEMIES then 
+        addGMFunction("in MULTI mode", function() 
+            _hemmonds_toolkit_data.SPAWN_MULTIPLE_ENEMIES=false 
+            gm_spawn_enemy_menu(previous_menu, faction)
+        end)
+    else
+        addGMFunction("in SINGLE mode", function() 
+            _hemmonds_toolkit_data.SPAWN_MULTIPLE_ENEMIES=true 
+            gm_spawn_enemy_menu(previous_menu, faction)
+        end)
+    end
+    
+    for i, txt in ipairs({"MT52 Hornet", "MU52 Hornet", "Adder MK5", "Stalker Q7", "Phobos T3"}) do
+        gm_exec_on_gm_click_button(" Add "..txt.." foe", function(x, y) math.abs(0) CpuShip():setTemplate(txt):setFaction("Romulans"):orderRoaming():setPosition(x, y) end, _hemmonds_toolkit_data.SPAWN_MULTIPLE_ENEMIES)
+    end
 end
 
-function _spawn_enemy(type_name)
+function _spawn_enemy(x, y, type_name)
     onGMClick(function(x,y) 
         onGMClick(nil)
         CpuShip():setTemplate(type_name):orderRoaming():setPosition(x, y)
